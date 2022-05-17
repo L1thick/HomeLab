@@ -1,0 +1,132 @@
+version: '3'
+services:
+  plex:
+    image: lscr.io/linuxserver/plex
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+    volumes:
+      - /docker/plex/config:/config
+      - /docker/plex/transcode:/transcode
+      - /media/series:/tv
+      - /media/movies:/movies
+      - /media/movies4k:/movies4k
+    restart: unless-stopped
+  ombi:
+    image: lscr.io/linuxserver/ombi
+    container_name: ombi
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - /docker/ombi:/config
+    ports:
+      - 3579:3579
+    restart: unless-stopped
+  sonarr:
+    image: lscr.io/linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - /docker/sonarr:/config
+      - /media/series:/tv
+      - /downloads:/downloads
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+  radarr:
+    image: lscr.io/linuxserver/radarr
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - /docker/radarr:/config
+      - /media/movies:/movies
+      - /downloads:/downloads
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+  nodeexp:
+    image: prom/node-exporter
+    container_name: nodeexp
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    ports:
+      - 9100:9100
+  watchtower:
+    container_name: watchtower
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - '/root/.docker/config.json:/config.json'
+    command: --interval 3600 --cleanup
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 8888:8888/tcp # HTTP proxy
+      - 8388:8388/tcp # Shadowsocks
+      - 8388:8388/udp # Shadowsocks
+      - 8080:8080 # SabNZBD
+      - 9091:9091 #transmission
+      - 51413:51413 #transmission
+      - 51413:51413/udp #transmission
+    volumes:
+      - /docker/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - OPENVPN_USER=
+      - OPENVPN_PASSWORD=
+      - SERVER_COUNTRIES=Switzerland
+    restart: unless-stopped
+  sabnzbd:
+    container_name: sab
+    image: linuxserver/sabnzbd
+    network_mode: service:gluetun
+    volumes:
+      - /docker/sabnzbd:/config
+      - /downloads:/downloads
+      - /downloads:/incomplete-downloads
+      - /nas_downloads/drop/nzb:/watch
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=American\New_York
+    restart: unless-stopped
+  transmission:
+    image: lscr.io/linuxserver/transmission
+    container_name: trans
+    network_mode: service:gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America\New_York
+      - TRANSMISSION_WEB_HOME=/combustion-release/
+    volumes:
+      - /docker/trans:/config
+      - /nas_downloads/complete:/downloads
+      - /downloads/incomplete:/incomplete-downloads
+      - /nas_downloads/drop/torrent:/watch
+    restart: unless-stopped
